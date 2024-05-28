@@ -37,7 +37,11 @@
 #include "paramset.h"
 #include "stats.h"
 #include "parallel.h"
+
 #include <algorithm>
+#include <queue>
+#include <utility>
+#include <vector>
 
 namespace pbrt {
 
@@ -100,8 +104,21 @@ struct LinearBVHNode {
     };
     uint16_t nPrimitives;  // 0 -> interior node
     uint8_t axis;          // interior node: xyz
-    uint8_t pad[1];        // ensure 32 byte total size
+    mutable uint8_t isShadingPointCluster = 0;
+    uint32_t shadingPointClustersStart;
+    uint32_t shadingPointClustersOffset;
+    // uint8_t pad[1];        // ensure 32 byte total size
 };
+
+inline bool LinearBVHNodeIsLeaf(const LinearBVHNode* node) {
+  CHECK_NOTNULL(node);
+  return node->nPrimitives ^ 0;
+}
+
+inline bool LinearBVHNodeIsShadingPointClusterRoot(const LinearBVHNode* node) {
+  CHECK_NOTNULL(node);
+  return node->isShadingPointCluster ^ 0;
+}
 
 // BVHAccel Utility Functions
 inline uint32_t LeftShift3(uint32_t x) {
@@ -640,6 +657,7 @@ BVHBuildNode *BVHAccel::buildUpperSAH(MemoryArena &arena,
 int BVHAccel::flattenBVHTree(BVHBuildNode *node, int *offset) {
     LinearBVHNode *linearNode = &nodes[*offset];
     linearNode->bounds = node->bounds;
+    linearNode->isShadingPointCluster = 0;
     int myOffset = (*offset)++;
     if (node->nPrimitives > 0) {
         CHECK(!node->children[0] && !node->children[1]);
@@ -668,34 +686,70 @@ bool BVHAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     // Follow ray through BVH nodes to find primitive intersections
     int toVisitOffset = 0, currentNodeIndex = 0;
     int nodesToVisit[64];
+    int shadingPointClusterRoot[64];
+    int curShadingPointClusterIndex = LinearBVHNodeIsShadingPointClusterRoot(&nodes[0]) ? 0 : -1;
+    int hittedShadingPointClusterIndex = -1;
     while (true) {
         const LinearBVHNode *node = &nodes[currentNodeIndex];
         // Check ray against BVH node
         if (node->bounds.IntersectP(ray, invDir, dirIsNeg)) {
-            if (node->nPrimitives > 0) {
+            if (LinearBVHNodeIsLeaf(node)) {
                 // Intersect ray with primitives in leaf BVH node
                 for (int i = 0; i < node->nPrimitives; ++i)
                     if (primitives[node->primitivesOffset + i]->Intersect(
-                            ray, isect))
+                            ray, isect)) {
                         hit = true;
+                        hittedShadingPointClusterIndex = curShadingPointClusterIndex;
+                    }
                 if (toVisitOffset == 0) break;
                 currentNodeIndex = nodesToVisit[--toVisitOffset];
+                curShadingPointClusterIndex = shadingPointClusterRoot[toVisitOffset];
             } else {
                 // Put far BVH node on _nodesToVisit_ stack, advance to near
                 // node
                 if (dirIsNeg[node->axis]) {
-                    nodesToVisit[toVisitOffset++] = currentNodeIndex + 1;
+                    nodesToVisit[toVisitOffset] = currentNodeIndex + 1;
+                    shadingPointClusterRoot[toVisitOffset++] = 
+                      LinearBVHNodeIsShadingPointClusterRoot(&nodes[currentNodeIndex+1]) ? 
+                      currentNodeIndex+1 : curShadingPointClusterIndex;
                     currentNodeIndex = node->secondChildOffset;
+                    curShadingPointClusterIndex = 
+                      LinearBVHNodeIsShadingPointClusterRoot(&nodes[currentNodeIndex]) ?
+                      currentNodeIndex : curShadingPointClusterIndex;
                 } else {
-                    nodesToVisit[toVisitOffset++] = node->secondChildOffset;
+                    nodesToVisit[toVisitOffset] = node->secondChildOffset;
+                    shadingPointClusterRoot[toVisitOffset++] = 
+                      LinearBVHNodeIsShadingPointClusterRoot(&nodes[node->secondChildOffset]) ? 
+                      node->secondChildOffset : curShadingPointClusterIndex;
                     currentNodeIndex = currentNodeIndex + 1;
+                    curShadingPointClusterIndex = 
+                      LinearBVHNodeIsShadingPointClusterRoot(&nodes[currentNodeIndex]) ?
+                      currentNodeIndex : curShadingPointClusterIndex;
                 }
             }
         } else {
             if (toVisitOffset == 0) break;
             currentNodeIndex = nodesToVisit[--toVisitOffset];
+            curShadingPointClusterIndex = shadingPointClusterRoot[toVisitOffset];
         }
     }
+
+    if (hit && hittedShadingPointClusterIndex >= 0) {
+      uint32_t nClusters = nodes[hittedShadingPointClusterIndex].shadingPointClustersOffset - 
+        nodes[hittedShadingPointClusterIndex].shadingPointClustersStart + 1;
+      if (nClusters == 1) {
+        isect->shadingPointCluster = nodes[hittedShadingPointClusterIndex].shadingPointClustersStart;
+      } else {
+        for (uint32_t i = nodes[hittedShadingPointClusterIndex].shadingPointClustersStart; 
+            i <= nodes[hittedShadingPointClusterIndex].shadingPointClustersOffset; ++i) {
+          if (Inside(isect->p, shadingPointClusters[i])) {
+            isect->shadingPointCluster = i;
+            break;
+          }
+        }
+      }
+    }
+
     return hit;
 }
 
@@ -735,6 +789,70 @@ bool BVHAccel::IntersectP(const Ray &ray) const {
         }
     }
     return false;
+}
+
+void BVHAccel::ComputeShadingPointCluster(uint32_t clusterSize) const {
+  using ShadingPointClusterBuildInfo = std::pair<int, Bounds3f>;
+  const Vector3f threshold = Vector3f(1e-4f, 1e-4f, 1e-4f);
+  auto compareBbox = [](const ShadingPointClusterBuildInfo& a, const ShadingPointClusterBuildInfo& b) {
+    return a.second.Diagonal().Length() < b.second.Diagonal().Length();
+  };
+  std::priority_queue<ShadingPointClusterBuildInfo, std::vector<ShadingPointClusterBuildInfo>, 
+    decltype(compareBbox)> queueBbox(compareBbox);
+
+  queueBbox.push(ShadingPointClusterBuildInfo(0, nodes[0].bounds));
+  while(queueBbox.size() < clusterSize) {
+    const ShadingPointClusterBuildInfo curCluster = queueBbox.top();
+    queueBbox.pop();
+    if (LinearBVHNodeIsLeaf(&nodes[curCluster.first])) {
+      Bounds3f bounds = curCluster.second;
+      int maxExtent = bounds.MaximumExtent();
+      Point3f max0 = bounds.pMax;
+      Point3f min1 = bounds.pMin;
+      max0[maxExtent] = (bounds.pMax[maxExtent] + bounds.pMin[maxExtent]) / 2.0f;
+      min1[maxExtent] = (bounds.pMax[maxExtent] + bounds.pMin[maxExtent]) / 2.0f;
+      Bounds3f b0 = Bounds3f(bounds.pMin, max0);
+      Bounds3f b1 = Bounds3f(min1, bounds.pMax);
+      queueBbox.push(ShadingPointClusterBuildInfo(curCluster.first, b0));
+      queueBbox.push(ShadingPointClusterBuildInfo(curCluster.first, b1));
+    } else {
+      queueBbox.push(ShadingPointClusterBuildInfo(curCluster.first+1, 
+            Bounds3f(nodes[curCluster.first+1].bounds.pMin - threshold,
+            nodes[curCluster.first+1].bounds.pMax + threshold)));
+      int secondChildIndex = nodes[curCluster.first].secondChildOffset;
+      queueBbox.push(ShadingPointClusterBuildInfo(secondChildIndex, 
+            Bounds3f(nodes[secondChildIndex].bounds.pMin - threshold,
+            nodes[secondChildIndex].bounds.pMax + threshold)));
+    }
+  }
+
+  shadingPointClusters.clear();
+  shadingPointClusters.reserve(clusterSize);
+  std::vector<ShadingPointClusterBuildInfo> containerIndex;
+  containerIndex.reserve(clusterSize);
+  while(!queueBbox.empty()) {
+    const auto& curCluster = queueBbox.top();
+    containerIndex.push_back(curCluster);
+    queueBbox.pop();
+  }
+
+  auto compareIndex = [](const ShadingPointClusterBuildInfo& a, const ShadingPointClusterBuildInfo& b) {
+    return a.first < b.first;
+  };
+  std::sort(containerIndex.begin(), containerIndex.end(), compareIndex);
+  uint32_t curIndex = -1;
+  for (uint32_t i = 0; i < containerIndex.size(); ++i) {
+    const auto& curCluster = containerIndex[i];
+    if (curIndex != curCluster.first) {
+      curIndex = curCluster.first;
+      nodes[curIndex].isShadingPointCluster = 1;
+      nodes[curIndex].shadingPointClustersStart = i;
+      nodes[curIndex].shadingPointClustersOffset = i;
+    } else {
+      ++nodes[curIndex].shadingPointClustersOffset;
+    }
+    this->shadingPointClusters.push_back(curCluster.second);
+  }
 }
 
 std::shared_ptr<BVHAccel> CreateBVHAccelerator(

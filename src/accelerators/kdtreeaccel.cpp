@@ -430,6 +430,9 @@ bool KdTreeAccel::IntersectP(const Ray &ray) const {
     return false;
 }
 
+void KdTreeAccel::ComputeShadingPointCluster(uint32_t clusterSize) const {
+}
+
 std::shared_ptr<KdTreeAccel> CreateKdTreeAccelerator(
     std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
     int isectCost = ps.FindOneInt("intersectcost", 80);

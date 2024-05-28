@@ -83,6 +83,8 @@ class GonioPhotometricLight : public Light {
     void Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
                 Float *pdfDir) const;
 
+    Bounds3f WorldBound() const;
+
   private:
     // GonioPhotometricLight Private Data
     const Point3f pLight;

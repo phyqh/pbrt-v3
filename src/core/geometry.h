@@ -915,7 +915,7 @@ class RayDifferential : public Ray {
         os << "[ " << (Ray &)r << " has differentials: " <<
             (r.hasDifferentials ? "true" : "false") << ", xo = " << r.rxOrigin <<
             ", xd = " << r.rxDirection << ", yo = " << r.ryOrigin << ", yd = " <<
-            r.ryDirection << " ]";
+            r.ryDirection;
         return os;
     }
 
@@ -1294,6 +1294,97 @@ bool InsideExclusive(const Point3<T> &p, const Bounds3<T> &b) {
             p.y < b.pMax.y && p.z >= b.pMin.z && p.z < b.pMax.z);
 }
 
+template <typename T>
+T MaxDistAlong(const Vector3<T>& p, const Vector3<T>& dir, 
+    const Point3<T>& bMin, const Point3<T>& bMax) {
+  T res = 0.0f;
+  for (int i = 0; i < 3; ++i) {
+    T diriP = dir[i] * p[i];
+    T mxi0 = dir[i] * bMin[i] - diriP;
+    T mxi1 = dir[i] * bMax[i] - diriP;
+    T maxDisI = std::abs(bMin[i] - p[i]);
+    maxDisI = std::max(std::abs(bMax[i] - p[i]), maxDisI);
+    res += maxDisI;
+  }
+
+  return res;
+}
+
+
+template <typename T>
+T MinDistAlong(const Vector3<T>& p, const Vector3<T>& dir,
+    const Point3<T>& bMin, const Point3<T>& bMax) {
+  T res = 0.0f;
+  for (int i = 0; i < 3; ++i) {
+    T dirP = dir[i] * p[i];
+    T mxi0 = dir[i] * bMin[i] - dirP;
+    T mxi1 = dir[i] * bMax[i] - dirP;
+    if (mxi0 * mxi1 <= 0.0f) continue;
+    else {
+      T minDisI = 0.0f;
+      if (mxi0 <= 0.0f) minDisI = std::abs(bMax[i] - p[i]);
+      else minDisI = std::abs(bMin[i] - p[i]);
+      res += minDisI;
+    }
+  }
+
+  return res;
+}
+
+template <typename T>
+T GeomTermBound(const Vector3<T>& p, const Vector3<T>& n,
+    const Point3<T>& bMin, const Point3<T>& bMax) {
+  T pz = MaxDistAlong(p, n, bMin, bMax);
+  Vector3<T> t, b;
+  CoordinateSystem(n, &t, &b);
+
+  T px, py;
+  if (pz >= 0) {
+    px = MinDistAlong(p, t, bMin, bMax);
+    py = MinDistAlong(p, b, bMin, bMax);
+  } else {
+    px = MaxDistAlong(p, t, bMin, bMax);
+    py = MaxDistAlong(p, b, bMin, bMax);
+  }
+
+  T hyp = Vector3f(pz, px, py).Length();
+  Float d2 = Vector3f(((bMin + bMax) * 0.5) - p).LengthSquared();
+
+  return pz / (hyp * d2);
+}
+
+template <typename T>
+T CosXBound(const Vector3<T>& p, const Vector3<T>& n,
+    const Point3<T>& bMin, const Point3<T>& bMax) {
+  T pz = MaxDistAlong(p, n, bMin, bMax);
+  Vector3<T> t, b;
+  CoordinateSystem(n, &t, &b);
+
+  T px, py;
+  if (pz >= 0) {
+    px = MinDistAlong(p, t, bMin, bMax);
+    py = MinDistAlong(p, b, bMin, bMax);
+  } else {
+    px = MaxDistAlong(p, t, bMin, bMax);
+    py = MaxDistAlong(p, b, bMin, bMax);
+  }
+
+  T hyp = Vector3f(pz, px, py).Length();
+
+  return pz / hyp;
+}
+
+template <typename T>
+Float SquaredDistanceToClosetPoint(const Vector3<T>& p, const Point3<T>& bMin,
+    const Point3<T>& bMax) {
+  Vector3<T> d;
+  for (int i = 0; i < 3; ++i) {
+    d[i] = std::min(std::max(p[i], bMin[i]), bMax[i]) - p[i];
+  }
+
+  return Dot(d, d);
+}
+
 template <typename T, typename U>
 inline Bounds3<T> Expand(const Bounds3<T> &b, U delta) {
     return Bounds3<T>(b.pMin - Vector3<T>(delta, delta, delta),
@@ -1473,6 +1564,32 @@ inline Float SphericalPhi(const Vector3f &v) {
     Float p = std::atan2(v.y, v.x);
     return (p < 0) ? (p + 2 * Pi) : p;
 }
+
+inline Float SafeDistance(const Bounds3f& b, const Point3f& p) {
+  Float dis = (0.5*(b.pMax + b.pMin) - p).Length();
+  Float dia = b.Diagonal().Length();
+  return dis > dia ? dis : 1.0f;
+}
+
+inline Float SafeMinDistance(const Bounds3f& b, const Point3f& p) {
+  Float x = Clamp(p.x, b.pMin.x, b.pMax.x);
+  Float y = Clamp(p.y, b.pMin.y, b.pMax.y);
+  Float z = Clamp(p.z, b.pMin.z, b.pMax.z);
+  Float d = (Point3f(x,y,z)-p).Length();
+  Float r = b.Diagonal().Length();
+  Float res = 2.0f / std::pow(r, 2.0f) * (1.0f - d / std::sqrt(d * d + r * r));
+  return res > r ? res : r;
+}
+
+struct BoundingSphere
+{
+  BoundingSphere() {}
+  BoundingSphere(const Point3f& c, const Float& r):
+    c(c), r(r) {}
+
+  Point3f c;
+  Float r;
+};
 
 }  // namespace pbrt
 

@@ -77,6 +77,18 @@ void PointLight::Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
     *pdfDir = UniformSpherePdf();
 }
 
+Bounds3f PointLight::WorldBound() const {
+  return Bounds3f(pLight, pLight);
+}
+
+bool PointLight::GetOrientationAttributes(Vector3f& axis, Float& thetaO, 
+    Float& thetaE) const {
+  axis = Vector3f(0.0f, 0.0f, 1.0f);
+  thetaO = Pi;
+  thetaE = PiOver2;
+  return true;
+}
+
 std::shared_ptr<PointLight> CreatePointLight(const Transform &light2world,
                                              const Medium *medium,
                                              const ParamSet &paramSet) {

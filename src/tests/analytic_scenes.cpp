@@ -17,6 +17,7 @@
 #include "integrators/volpath.h"
 #include "lights/diffuse.h"
 #include "lights/point.h"
+#include "lightsamplers/uniform.h"
 #include "materials/matte.h"
 #include "materials/mirror.h"
 #include "materials/uber.h"
@@ -81,6 +82,8 @@ std::vector<TestScene> GetScenes() {
             std::make_shared<ConstantTexture<Float>>(0.);
         std::shared_ptr<Material> material =
             std::make_shared<MatteMaterial>(Kd, sigma, nullptr);
+        std::shared_ptr<UniformLightSampler> lightSampler = 
+            std::make_shared<UniformLightSampler>("spatial");
 
         MediumInterface mediumInterface;
         std::vector<std::shared_ptr<Primitive>> prims;
@@ -92,7 +95,7 @@ std::vector<TestScene> GetScenes() {
         lights.push_back(
             std::make_shared<PointLight>(Transform(), nullptr, Spectrum(Pi)));
 
-        std::unique_ptr<Scene> scene(new Scene(bvh, lights));
+        std::unique_ptr<Scene> scene(new Scene(bvh, lights, lightSampler));
 
         scenes.push_back({std::move(scene), "Sphere, 1 light, Kd = 0.5", 1.0});
     }
@@ -110,6 +113,8 @@ std::vector<TestScene> GetScenes() {
             std::make_shared<ConstantTexture<Float>>(0.);
         std::shared_ptr<Material> material =
             std::make_shared<MatteMaterial>(Kd, sigma, nullptr);
+        std::shared_ptr<UniformLightSampler> lightSampler = 
+            std::make_shared<UniformLightSampler>("spatial");
 
         MediumInterface mediumInterface;
         std::vector<std::shared_ptr<Primitive>> prims;
@@ -127,7 +132,7 @@ std::vector<TestScene> GetScenes() {
         lights.push_back(std::make_shared<PointLight>(Transform(), nullptr,
                                                       Spectrum(Pi / 4)));
 
-        std::unique_ptr<Scene> scene(new Scene(bvh, lights));
+        std::unique_ptr<Scene> scene(new Scene(bvh, lights, lightSampler));
 
         scenes.push_back({std::move(scene), "Sphere, 1 light, Kd = 0.5", 1.0});
     }
@@ -145,6 +150,8 @@ std::vector<TestScene> GetScenes() {
             std::make_shared<ConstantTexture<Float>>(0.);
         std::shared_ptr<Material> material =
             std::make_shared<MatteMaterial>(Kd, sigma, nullptr);
+        std::shared_ptr<UniformLightSampler> lightSampler = 
+            std::make_shared<UniformLightSampler>("spatial");
 
         std::shared_ptr<AreaLight> areaLight =
             std::make_shared<DiffuseAreaLight>(Transform(), nullptr,
@@ -159,7 +166,7 @@ std::vector<TestScene> GetScenes() {
             sphere, material, areaLight, mediumInterface));
         std::shared_ptr<BVHAccel> bvh = std::make_shared<BVHAccel>(prims);
 
-        std::unique_ptr<Scene> scene(new Scene(bvh, lights));
+        std::unique_ptr<Scene> scene(new Scene(bvh, lights, lightSampler));
 
         scenes.push_back({std::move(scene), "Sphere, Kd = 0.5, Le = 0.5", 1.0});
     }
@@ -185,6 +192,8 @@ std::vector<TestScene> GetScenes() {
             std::make_shared<ConstantTexture<Float>>(1.);
         std::shared_ptr<Material> material = std::make_shared<UberMaterial>(
             Kd, black, Kr, black, zero, zero, zero, white, one, nullptr, false);
+        std::shared_ptr<UniformLightSampler> lightSampler = 
+            std::make_shared<UniformLightSampler>("spatial");
 
         MediumInterface mediumInterface;
         std::vector<std::shared_ptr<Primitive>> prims;
@@ -196,7 +205,7 @@ std::vector<TestScene> GetScenes() {
         lights.push_back(std::make_shared<PointLight>(Transform(), nullptr,
                                                       Spectrum(3. * Pi)));
 
-        std::unique_ptr<Scene> scene(new Scene(bvh, lights));
+        std::unique_ptr<Scene> scene(new Scene(bvh, lights, lightSampler));
 
         scenes.push_back(
             {std::move(scene), "Sphere, 1 light, Kd = 0.25 Kr = 0.5", 1.0});

@@ -61,10 +61,12 @@ class BVHAccel : public Aggregate {
     BVHAccel(std::vector<std::shared_ptr<Primitive>> p,
              int maxPrimsInNode = 1,
              SplitMethod splitMethod = SplitMethod::SAH);
-    Bounds3f WorldBound() const;
+    Bounds3f WorldBound() const override;
     ~BVHAccel();
-    bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
-    bool IntersectP(const Ray &ray) const;
+    bool Intersect(const Ray &ray, SurfaceInteraction *isect) const override;
+    bool IntersectP(const Ray &ray) const override;
+
+    virtual void ComputeShadingPointCluster(uint32_t clusterSize) const override;
 
   private:
     // BVHAccel Private Methods
@@ -91,6 +93,7 @@ class BVHAccel : public Aggregate {
     const int maxPrimsInNode;
     const SplitMethod splitMethod;
     std::vector<std::shared_ptr<Primitive>> primitives;
+    mutable std::vector<Bounds3f> shadingPointClusters;
     LinearBVHNode *nodes = nullptr;
 };
 

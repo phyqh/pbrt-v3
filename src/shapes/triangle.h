@@ -79,19 +79,21 @@ class Triangle : public Shape {
         triMeshBytes += sizeof(*this);
         faceIndex = mesh->faceIndices.size() ? mesh->faceIndices[triNumber] : 0;
     }
-    Bounds3f ObjectBound() const;
-    Bounds3f WorldBound() const;
+    Bounds3f ObjectBound() const override;
+    Bounds3f WorldBound() const override;
     bool Intersect(const Ray &ray, Float *tHit, SurfaceInteraction *isect,
-                   bool testAlphaTexture = true) const;
-    bool IntersectP(const Ray &ray, bool testAlphaTexture = true) const;
-    Float Area() const;
+                   bool testAlphaTexture = true) const override;
+    bool IntersectP(const Ray &ray, bool testAlphaTexture = true) const override;
+    Float Area() const override;
 
     using Shape::Sample;  // Bring in the other Sample() overload.
-    Interaction Sample(const Point2f &u, Float *pdf) const;
+    Interaction Sample(const Point2f &u, Float *pdf) const override;
 
     // Returns the solid angle subtended by the triangle w.r.t. the given
     // reference point p.
-    Float SolidAngle(const Point3f &p, int nSamples = 0) const;
+    Float SolidAngle(const Point3f &p, int nSamples = 0) const override;
+
+    bool GetOrientationAttributes(Vector3f& axis, Float& thetaO, Float& thetaE) const override;
 
   private:
     // Triangle Private Methods

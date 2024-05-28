@@ -49,6 +49,7 @@ Light::Light(int flags, const Transform &LightToWorld,
     : flags(flags),
       nSamples(std::max(1, nSamples)),
       mediumInterface(mediumInterface),
+      index(-1),
       LightToWorld(LightToWorld),
       WorldToLight(Inverse(LightToWorld)) {
     ++numLights;
@@ -81,6 +82,17 @@ Spectrum VisibilityTester::Tr(const Scene &scene, Sampler &sampler) const {
 }
 
 Spectrum Light::Le(const RayDifferential &ray) const { return Spectrum(0.f); }
+
+Bounds3f Light::WorldBound() const {
+  Point3f pLight = LightToWorld(Point3f(0.0f, 0.0f, 0.0f));
+  return Bounds3f(pLight, pLight);
+}
+
+bool Light::GetOrientationAttributes(Vector3f& axis, Float& thetaO, Float& thetaE) const {
+  axis = Vector3f(0.0f, 0.0f, 0.0f);
+  thetaO = thetaE = 0.0f;
+  return false;
+}
 
 AreaLight::AreaLight(const Transform &LightToWorld, const MediumInterface &medium,
                      int nSamples)

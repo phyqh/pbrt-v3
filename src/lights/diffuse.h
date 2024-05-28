@@ -66,6 +66,9 @@ class DiffuseAreaLight : public AreaLight {
     void Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
                 Float *pdfDir) const;
 
+    Bounds3f WorldBound() const;
+    bool GetOrientationAttributes(Vector3f& axis, Float& thetaO, Float& thetaE) const;
+
   protected:
     // DiffuseAreaLight Protected Data
     const Spectrum Lemit;

@@ -124,6 +124,8 @@ class Aggregate : public Primitive {
     void ComputeScatteringFunctions(SurfaceInteraction *isect,
                                     MemoryArena &arena, TransportMode mode,
                                     bool allowMultipleLobes) const;
+
+    virtual void ComputeShadingPointCluster(uint32_t clusterSize) const = 0;
 };
 
 }  // namespace pbrt

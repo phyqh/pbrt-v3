@@ -150,6 +150,7 @@ class SeparableBSSRDF;
 class TabulatedBSSRDF;
 struct BSSRDFTable;
 class Light;
+class LightSampler;
 class VisibilityTester;
 class AreaLight;
 struct Distribution1D;

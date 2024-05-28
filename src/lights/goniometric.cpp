@@ -83,6 +83,10 @@ void GonioPhotometricLight::Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
     *pdfDir = UniformSpherePdf();
 }
 
+Bounds3f GonioPhotometricLight::WorldBound() const {
+  return Bounds3f(pLight, pLight);
+}
+
 std::shared_ptr<GonioPhotometricLight> CreateGoniometricLight(
     const Transform &light2world, const Medium *medium,
     const ParamSet &paramSet) {

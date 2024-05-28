@@ -67,6 +67,23 @@ struct Distribution1D {
             for (int i = 1; i < n + 1; ++i) cdf[i] /= funcInt;
         }
     }
+    void Normalize() {
+        // Compute integral of step function at $x_i$
+        int n = Count();
+        cdf[0] = 0;
+        for (int i = 1; i < n + 1; ++i) cdf[i] = cdf[i - 1] + func[i - 1] / n;
+
+        // Transform step function integral into CDF
+        funcInt = cdf[n];
+        if (funcInt == 0) {
+            for (int i = 1; i < n + 1; ++i) cdf[i] = Float(i) / Float(n);
+        } else {
+            for (int i = 1; i < n + 1; ++i) cdf[i] /= funcInt;
+        }
+    }
+    void Update(int index, Float newVal) {
+      func[index] = newVal;
+    }
     int Count() const { return (int)func.size(); }
     Float SampleContinuous(Float u, Float *pdf, int *off = nullptr) const {
         // Find surrounding CDF segments and _offset_

@@ -39,6 +39,7 @@
 #define PBRT_CORE_RNG_H
 
 // core/rng.h*
+#include "geometry.h"
 #include "pbrt.h"
 
 namespace pbrt {
@@ -74,6 +75,9 @@ class RNG {
             uint32_t r = UniformUInt32();
             if (r >= threshold) return r % b;
         }
+    }
+    Point2f Uniform2D() {
+      return Point2f(UniformFloat(), UniformFloat());
     }
     Float UniformFloat() {
 #ifndef PBRT_HAVE_HEX_FP_CONSTANTS

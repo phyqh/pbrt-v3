@@ -82,6 +82,9 @@ class Shape {
     // used in this case.
     virtual Float SolidAngle(const Point3f &p, int nSamples = 512) const;
 
+    virtual bool GetOrientationAttributes(Vector3f& axis, Float& thetaO, 
+        Float& thetaE) const;
+
     // Shape Public Data
     const Transform *ObjectToWorld, *WorldToObject;
     const bool reverseOrientation;

@@ -323,6 +323,13 @@ Float Sphere::SolidAngle(const Point3f &p, int nSamples) const {
     return (2 * Pi * (1 - cosTheta));
 }
 
+bool Sphere::GetOrientationAttributes(Vector3f& axis, Float &thetaO, Float &thetaE) const {
+  axis = Vector3f(0.0f, 0.0f, 1.0f);
+  thetaO = Pi;
+  thetaE = PiOver2;
+  return true;
+}
+
 std::shared_ptr<Shape> CreateSphereShape(const Transform *o2w,
                                          const Transform *w2o,
                                          bool reverseOrientation,

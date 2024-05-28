@@ -742,4 +742,22 @@ std::vector<std::shared_ptr<Shape>> CreateTriangleMeshShape(
                               S, N, uvs, alphaTex, shadowAlphaTex, faceIndices);
 }
 
+bool Triangle::GetOrientationAttributes(Vector3f& axis, Float& thetaO, Float& thetaE) const {
+  TriangleMesh* meshPtr = mesh.get();
+  const int* v = &meshPtr->vertexIndices[3 * faceIndex];
+  Point3f p0 = meshPtr->p[v[0]];
+  Point3f p1 = meshPtr->p[v[1]];
+  Point3f p2 = meshPtr->p[v[2]];
+  Vector3f n = Normalize(Cross(p1 - p0, p2 - p0));
+  
+  if (meshPtr->n != nullptr) {
+    Normal3f ns(meshPtr->n[v[0]] + meshPtr->n[v[1]] + meshPtr->n[v[2]]);
+    n = Faceforward(n, Vector3f(ns));
+  }
+
+  axis = n;
+  thetaO = Pi;
+  thetaE = PiOver2;
+  return true;
+}
 }  // namespace pbrt

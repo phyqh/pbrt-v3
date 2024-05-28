@@ -43,30 +43,47 @@
 
 namespace pbrt {
 
+std::unique_ptr<Distribution1D> ComputeLightPowerDistribution(const std::vector<std::shared_ptr<Light>>& lights) {
+  if (lights.size() == 0) {
+    return nullptr;
+  }
+  std::vector<Float> lightPowers(lights.size(), -1.0);
+  for (uint32_t i = 0; i < lights.size(); ++i) {
+    lightPowers[i] = lights[i]->Power().y();
+  }
+  return std::make_unique<Distribution1D>(&lightPowers[0], lights.size());
+}
+
 LightDistribution::~LightDistribution() {}
 
 std::unique_ptr<LightDistribution> CreateLightSampleDistribution(
     const std::string &name, const Scene &scene) {
-    if (name == "uniform" || scene.lights.size() == 1)
+  return CreateLightSampleDistribution(name, scene, scene.lights);
+}
+
+std::unique_ptr<LightDistribution> CreateLightSampleDistribution(
+    const std::string &name, const Scene &scene, const std::vector<std::shared_ptr<Light>>& lights) {
+    if (name == "uniform" || lights.size() == 1)
         return std::unique_ptr<LightDistribution>{
-            new UniformLightDistribution(scene)};
+            new UniformLightDistribution(scene, lights)};
     else if (name == "power")
         return std::unique_ptr<LightDistribution>{
-            new PowerLightDistribution(scene)};
+            new PowerLightDistribution(scene, lights)};
     else if (name == "spatial")
         return std::unique_ptr<LightDistribution>{
-            new SpatialLightDistribution(scene)};
+            new SpatialLightDistribution(scene, lights)};
     else {
         Error(
             "Light sample distribution type \"%s\" unknown. Using \"spatial\".",
             name.c_str());
         return std::unique_ptr<LightDistribution>{
-            new SpatialLightDistribution(scene)};
+            new SpatialLightDistribution(scene, lights)};
     }
 }
 
-UniformLightDistribution::UniformLightDistribution(const Scene &scene) {
-    std::vector<Float> prob(scene.lights.size(), Float(1));
+UniformLightDistribution::UniformLightDistribution(const Scene &scene,
+    const std::vector<std::shared_ptr<Light>>& lights) {
+    std::vector<Float> prob(lights.size(), Float(1));
     distrib.reset(new Distribution1D(&prob[0], int(prob.size())));
 }
 
@@ -74,8 +91,8 @@ const Distribution1D *UniformLightDistribution::Lookup(const Point3f &p) const {
     return distrib.get();
 }
 
-PowerLightDistribution::PowerLightDistribution(const Scene &scene)
-    : distrib(ComputeLightPowerDistribution(scene)) {}
+PowerLightDistribution::PowerLightDistribution(const Scene &scene, const std::vector<std::shared_ptr<Light>>& lights)
+    : distrib(ComputeLightPowerDistribution(lights)) {}
 
 const Distribution1D *PowerLightDistribution::Lookup(const Point3f &p) const {
     return distrib.get();
@@ -94,8 +111,8 @@ STAT_INT_DISTRIBUTION("SpatialLightDistribution/Hash probes per lookup", nProbes
 static const uint64_t invalidPackedPos = 0xffffffffffffffff;
 
 SpatialLightDistribution::SpatialLightDistribution(const Scene &scene,
-                                                   int maxVoxels)
-    : scene(scene) {
+    const std::vector<std::shared_ptr<Light>>& lights,
+    int maxVoxels): scene(scene), lights(lights) {
     // Compute the number of voxels so that the widest scene bounding box
     // dimension has maxVoxels voxels and the other dimensions have a number
     // of voxels so that voxels are roughly cube shaped.
@@ -253,7 +270,7 @@ SpatialLightDistribution::ComputeDistribution(Point3i pi) const {
     // point on the light source) as an approximation to how much the light
     // is likely to contribute to illumination in the voxel.
     int nSamples = 128;
-    std::vector<Float> lightContrib(scene.lights.size(), Float(0));
+    std::vector<Float> lightContrib(lights.size(), Float(0));
     for (int i = 0; i < nSamples; ++i) {
         Point3f po = voxelBounds.Lerp(Point3f(
             RadicalInverse(0, i), RadicalInverse(1, i), RadicalInverse(2, i)));
@@ -263,11 +280,11 @@ SpatialLightDistribution::ComputeDistribution(Point3i pi) const {
         // Use the next two Halton dimensions to sample a point on the
         // light source.
         Point2f u(RadicalInverse(3, i), RadicalInverse(4, i));
-        for (size_t j = 0; j < scene.lights.size(); ++j) {
+        for (size_t j = 0; j < lights.size(); ++j) {
             Float pdf;
             Vector3f wi;
             VisibilityTester vis;
-            Spectrum Li = scene.lights[j]->Sample_Li(intr, u, &wi, &pdf, &vis);
+            Spectrum Li = lights[j]->Sample_Li(intr, u, &wi, &pdf, &vis);
             if (pdf > 0) {
                 // TODO: look at tracing shadow rays / computing beam
                 // transmittance.  Probably shouldn't give those full weight

@@ -101,6 +101,18 @@ void SpotLight::Pdf_Le(const Ray &ray, const Normal3f &, Float *pdfPos,
                   : 0;
 }
 
+Bounds3f SpotLight::WorldBound() const {
+  return Bounds3f(pLight, pLight);
+}
+
+bool SpotLight::GetOrientationAttributes(Vector3f& axis, 
+    Float &thetaO, Float &thetaE) const {
+  axis = LightToWorld(Vector3f(0.0f, 0.0f, 1.0f));
+  thetaO = std::acos(cosFalloffStart);
+  thetaE = std::acos(cosTotalWidth) - thetaO;
+  return true;
+}
+
 std::shared_ptr<SpotLight> CreateSpotLight(const Transform &l2w,
                                            const Medium *medium,
                                            const ParamSet &paramSet) {

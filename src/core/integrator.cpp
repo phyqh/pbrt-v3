@@ -37,11 +37,14 @@
 #include "sampling.h"
 #include "parallel.h"
 #include "film.h"
+#include "materials/ltc.h"
 #include "sampler.h"
 #include "integrator.h"
 #include "progressreporter.h"
 #include "camera.h"
 #include "stats.h"
+
+#include <queue>
 
 namespace pbrt {
 
@@ -98,9 +101,11 @@ Spectrum UniformSampleOneLight(const Interaction &it, const Scene &scene,
         lightNum = std::min((int)(sampler.Get1D() * nLights), nLights - 1);
         lightPdf = Float(1) / nLights;
     }
+
     const std::shared_ptr<Light> &light = scene.lights[lightNum];
     Point2f uLight = sampler.Get2D();
     Point2f uScattering = sampler.Get2D();
+    CHECK_GE(lightPdf, 0.0f);
     return EstimateDirect(it, uScattering, *light, uLight,
                           scene, sampler, arena, handleMedia) / lightPdf;
 }
@@ -222,6 +227,111 @@ std::unique_ptr<Distribution1D> ComputeLightPowerDistribution(
         lightPower.push_back(light->Power().y());
     return std::unique_ptr<Distribution1D>(
         new Distribution1D(&lightPower[0], lightPower.size()));
+}
+
+std::shared_ptr<LightCut> ConstructLocalLightcut(
+    const std::shared_ptr<LightCut>& lightCut,
+    const std::shared_ptr<LightTree>& lightTree,
+    const SurfaceInteraction& its, const Vector3f& wi,
+    Float threshWeightP, int maxSize) {
+
+  auto compare = [](LightCutNode& a, LightCutNode& b) {
+    return a.weight > b.weight;
+  };
+
+  std::priority_queue<LightCutNode,
+    std::vector<LightCutNode>,
+    decltype(compare)> Q(compare);
+
+  auto bxdfType = BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
+
+  BRDFRecord record;
+  bool haveLTC = LTC::GetBRDFRecord(its, record);
+
+  if (!haveLTC)
+    return lightCut;
+
+  // Calcute BSDF and geometry terms for old nodes
+  std::vector<LightCutNode> nodes;
+  nodes.reserve(maxSize);
+  Float weightSum = 0.0f;
+  for (const auto& node : lightCut->_cut) {
+    const LinearLightTreeNode* curNode = lightTree->getNodeByIndex(node.lightTreeNodeIndex);
+    LightCutNode cutNode(node.lightTreeNodeIndex, node.weight);
+    Vector3f wo = Normalize(LinearLightTreeNodeCentroid(curNode) - its.p);
+    BoundingSphere sphere;
+    curNode->bound.BoundingSphere(&sphere.c, &sphere.r);
+    cutNode.bsdfVal = haveLTC ? 1.0f + LTC::EvaluatePivotIntegral(its, record, sphere) : 1.0f;
+    // cutNode.bsdfVal = 1.0f;
+    // Float d = SafeMinDistance(curNode->bound, its.p);
+    // cutNode.geometryTerm = AbsDot(wo, its.shading.n) * AbsDot(-wo, curNode->lightCone.axis()) / (d * d);
+    cutNode.geometryTerm = 1.0f;
+    cutNode.weight *= (cutNode.bsdfVal* cutNode.geometryTerm);
+    weightSum += cutNode.weight;
+    Q.push(cutNode);
+  }
+
+  LightCut* cut = new LightCut();
+  cut->_cut.reserve(maxSize);
+  int currentSize = Q.size();
+  while(!Q.empty() && currentSize < maxSize) {
+    const auto& curNode = Q.top();
+    Q.pop();
+    int index = curNode.lightTreeNodeIndex;
+    const LinearLightTreeNode* curLightNode = lightTree->getNodeByIndex(index);
+    if (LinearLightTreeNodeIsLeaf(curLightNode) || curNode.weight < threshWeightP * weightSum) {
+      nodes.push_back(curNode);
+    } else {
+      const LinearLightTreeNode* lLightNode = lightTree->getNodeByIndex(index+1);
+      const LinearLightTreeNode* rLightNode = lightTree->getNodeByIndex(curLightNode->secondChildOffset);
+
+      LightCutNode lNode(index+1, lLightNode->power);
+      Vector3f lwo = Normalize(LinearLightTreeNodeCentroid(lLightNode) - its.p);
+      BoundingSphere lsphere;
+      lLightNode->bound.BoundingSphere(&lsphere.c, &lsphere.r);
+      lNode.bsdfVal = haveLTC ? 1.0f + LTC::EvaluatePivotIntegral(its, record, lsphere) : 1.0f;
+      // lNode.bsdfVal = 1.0f;
+      // lNode.geometryTerm = AbsDot(its.shading.n, lwo) * AbsDot(lLightNode->lightCone.axis(), lwo)
+      //   / (d1 * d1);
+      lNode.geometryTerm = 1.0f;
+      lNode.weight *= (lNode.bsdfVal * lNode.geometryTerm);
+      Q.push(lNode);
+
+      LightCutNode rNode(curLightNode->secondChildOffset, rLightNode->power);
+      Vector3f rwo = Normalize(LinearLightTreeNodeCentroid(rLightNode) - its.p);
+      BoundingSphere rsphere;
+      rLightNode->bound.BoundingSphere(&rsphere.c, &rsphere.r);
+      rNode.bsdfVal = haveLTC ? 1.0f + LTC::EvaluatePivotIntegral(its, record, rsphere) : 1.0f;
+      // rNode.bsdfVal = 1.0f;
+      rNode.geometryTerm = 1.0f;
+      // rNode.geometryTerm = AbsDot(its.shading.n, rwo);
+      // rNode.geometryTerm = AbsDot(its.shading.n, rwo) * AbsDot(lLightNode->lightCone.axis(), rwo)
+      //   / (d2 * d2);
+      rNode.weight *= (rNode.bsdfVal * rNode.geometryTerm);
+      Q.push(rNode);
+
+      ++currentSize;
+    }
+  }
+
+  std::vector<Float> weights;
+  weights.reserve(maxSize);
+
+  while(!Q.empty()) {
+    nodes.push_back(Q.top());
+    Q.pop();
+  }
+
+  for (auto& node : nodes) {
+    if (node.weight > 0) {
+      weights.push_back(node.weight);
+      cut->_cut.push_back(node);
+    }
+  }
+
+  cut->_distribution = std::unique_ptr<Distribution1D>(
+      new Distribution1D(&weights[0], weights.size()));
+  return std::shared_ptr<LightCut>(cut);
 }
 
 // SamplerIntegrator Method Definitions

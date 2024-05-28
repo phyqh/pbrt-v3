@@ -101,4 +101,11 @@ Float Shape::SolidAngle(const Point3f &p, int nSamples) const {
     return solidAngle / nSamples;
 }
 
+bool Shape::GetOrientationAttributes(Vector3f& axis, Float &thetaO, 
+    Float &thetaE) const {
+  axis = Vector3f(0.0f, 0.0f, 0.0f);
+  thetaO = thetaE = 0.0f;
+  return false;
+}
+
 }  // namespace pbrt

@@ -44,6 +44,9 @@
 
 namespace pbrt {
 
+std::unique_ptr<Distribution1D> ComputeLightPowerDistribution(
+    const std::vector<std::shared_ptr<Light>>& lights);
+
 // LightDistribution defines a general interface for classes that provide
 // probability distributions for sampling light sources at a given point in
 // space.
@@ -58,6 +61,8 @@ class LightDistribution {
 
 std::unique_ptr<LightDistribution> CreateLightSampleDistribution(
     const std::string &name, const Scene &scene);
+std::unique_ptr<LightDistribution> CreateLightSampleDistribution(
+    const std::string &name, const Scene &scene, const std::vector<std::shared_ptr<Light>>& lights);
 
 // The simplest possible implementation of LightDistribution: this returns
 // a uniform distribution over all light sources, ignoring the provided
@@ -68,7 +73,7 @@ std::unique_ptr<LightDistribution> CreateLightSampleDistribution(
 // UniformLightDistribution class.)
 class UniformLightDistribution : public LightDistribution {
   public:
-    UniformLightDistribution(const Scene &scene);
+    UniformLightDistribution(const Scene &scene, const std::vector<std::shared_ptr<Light>>& lights);
     const Distribution1D *Lookup(const Point3f &p) const;
 
   private:
@@ -86,7 +91,7 @@ class UniformLightDistribution : public LightDistribution {
 // though also without the PowerLightDistribution class.)
 class PowerLightDistribution : public LightDistribution {
   public:
-    PowerLightDistribution(const Scene &scene);
+    PowerLightDistribution(const Scene &scene, const std::vector<std::shared_ptr<Light>>& lights);
     const Distribution1D *Lookup(const Point3f &p) const;
 
   private:
@@ -99,7 +104,8 @@ class PowerLightDistribution : public LightDistribution {
 // and a sampling distribution is computed as needed for each voxel.
 class SpatialLightDistribution : public LightDistribution {
   public:
-    SpatialLightDistribution(const Scene &scene, int maxVoxels = 64);
+    SpatialLightDistribution(const Scene &scene, const std::vector<std::shared_ptr<Light>>& lights, 
+        int maxVoxels = 64);
     ~SpatialLightDistribution();
     const Distribution1D *Lookup(const Point3f &p) const;
 
@@ -109,6 +115,7 @@ class SpatialLightDistribution : public LightDistribution {
     Distribution1D *ComputeDistribution(Point3i pi) const;
 
     const Scene &scene;
+    const std::vector<std::shared_ptr<Light>>& lights;
     int nVoxels[3];
 
     // The hash table is a fixed number of HashEntry structs (where we

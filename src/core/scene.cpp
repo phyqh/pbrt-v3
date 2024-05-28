@@ -32,6 +32,7 @@
 
 
 // core/scene.cpp*
+#include "lightsampler.h"
 #include "scene.h"
 #include "stats.h"
 
@@ -40,6 +41,19 @@ namespace pbrt {
 STAT_COUNTER("Intersections/Regular ray intersection tests",
              nIntersectionTests);
 STAT_COUNTER("Intersections/Shadow ray intersection tests", nShadowTests);
+
+void Scene::Preprocess() const {
+  _lightSampler->Preprocess(*this, this->lights);
+}
+
+void Scene::PreprocessWithVPL(const std::vector<std::shared_ptr<Light> > &virtualPointLights) const {
+  _lightSampler->Preprocess(*this, virtualPointLights, true);
+}
+
+Spectrum Scene::SampleLights(const Vector3f& wi, const Interaction& it, MemoryArena& arena,
+    Sampler& sampler, bool handleMedia, uint32_t nSamples) const {
+  return _lightSampler->Sample(wi, it, *this, arena, sampler, handleMedia, nSamples);
+} 
 
 // Scene Method Definitions
 bool Scene::Intersect(const Ray &ray, SurfaceInteraction *isect) const {

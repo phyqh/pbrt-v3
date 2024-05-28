@@ -59,6 +59,7 @@
 #include "integrators/path.h"
 #include "integrators/sppm.h"
 #include "integrators/volpath.h"
+#include "integrators/vpl.h"
 #include "integrators/whitted.h"
 #include "lights/diffuse.h"
 #include "lights/distant.h"
@@ -67,6 +68,14 @@
 #include "lights/point.h"
 #include "lights/projection.h"
 #include "lights/spot.h"
+#include "lightsamplers/boras.h"
+#include "lightsamplers/nrl.h"
+#include "lightsamplers/nrlmis.h"
+#include "lightsamplers/slc.h"
+#include "lightsamplers/uniform.h"
+#include "lightsamplers/vaboras.h"
+#include "lightsamplers/varl.h"
+#include "lightsamplers/varlmis.h"
 #include "materials/disney.h"
 #include "materials/fourier.h"
 #include "materials/glass.h"
@@ -167,6 +176,8 @@ struct RenderOptions {
     ParamSet FilterParams;
     std::string FilmName = "image";
     ParamSet FilmParams;
+    std::string LightSamplerName = "uniform";
+    ParamSet LightSamplerParams;
     std::string SamplerName = "halton";
     ParamSet SamplerParams;
     std::string AcceleratorName = "bvh";
@@ -767,11 +778,11 @@ std::shared_ptr<AreaLight> MakeAreaLight(const std::string &name,
     return area;
 }
 
-std::shared_ptr<Primitive> MakeAccelerator(
+std::shared_ptr<Aggregate> MakeAccelerator(
     const std::string &name,
     std::vector<std::shared_ptr<Primitive>> prims,
     const ParamSet &paramSet) {
-    std::shared_ptr<Primitive> accel;
+    std::shared_ptr<Aggregate> accel;
     if (name == "bvh")
         accel = CreateBVHAccelerator(std::move(prims), paramSet);
     else if (name == "kdtree")
@@ -811,6 +822,32 @@ Camera *MakeCamera(const std::string &name, const ParamSet &paramSet,
         Warning("Camera \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
     return camera;
+}
+
+std::shared_ptr<LightSampler> MakeLightSampler(const std::string& name,
+    const ParamSet& paramSet) {
+  LightSampler *lightSampler = nullptr;
+  if (name == "uniform") {
+    lightSampler = CreateUniformLightSampler(paramSet);
+  } else if (name == "slc") {
+    lightSampler = CreateSLCLightSampler(paramSet);
+  } else if (name == "nrl") {
+    lightSampler = CreateNaiveRLLightSampler(paramSet);
+  } else if (name == "nrlmis") {
+    lightSampler = CreateNRLMISLightSampler(paramSet);
+  } else if (name == "varl") {
+    lightSampler = CreateVARLLightSampler(paramSet);
+  } else if (name == "varlmis") {
+    lightSampler = CreateVARLMISLightSampler(paramSet);
+  } else if (name == "boras") {
+    lightSampler = CreateBayesianOnlineRegressionLightSampler(paramSet);
+  } else if (name == "vaboras") {
+    lightSampler = CreateVarianceAwareBayesianOnlineRegressionLightSampler(paramSet);
+  } else {
+    Warning("LightSampler \"%s\" unknown.", name.c_str());
+  }
+
+  return std::shared_ptr<LightSampler>(lightSampler);
 }
 
 std::shared_ptr<Sampler> MakeSampler(const std::string &name,
@@ -1315,6 +1352,18 @@ void pbrtLightSource(const std::string &name, const ParamSet &params) {
     }
 }
 
+void pbrtLightSampler(const std::string& name, const ParamSet& params) {
+  VERIFY_OPTIONS("LightSampler");
+  renderOptions->LightSamplerName = name;
+  renderOptions->LightSamplerParams = params;
+
+  if (PbrtOptions.cat || PbrtOptions.toPly) {
+      printf("%*sLightSampler \"%s\" ", catIndentCount, "", name.c_str());
+      params.Print(catIndentCount);
+      printf("\n");
+  }
+}
+
 void pbrtAreaLightSource(const std::string &name, const ParamSet &params) {
     VERIFY_WORLD("AreaLightSource");
     graphicsState.areaLight = name;
@@ -1649,10 +1698,13 @@ void pbrtWorldEnd() {
 }
 
 Scene *RenderOptions::MakeScene() {
-    std::shared_ptr<Primitive> accelerator =
+    std::shared_ptr<Aggregate> accelerator =
         MakeAccelerator(AcceleratorName, std::move(primitives), AcceleratorParams);
+    std::shared_ptr<LightSampler> lightSampler = MakeLightSampler(renderOptions->LightSamplerName, 
+        renderOptions->LightSamplerParams);
+
     if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives);
-    Scene *scene = new Scene(accelerator, lights);
+    Scene *scene = new Scene(accelerator, lights, lightSampler);
     // Erase primitives and lights from _RenderOptions_
     primitives.clear();
     lights.clear();
@@ -1683,6 +1735,8 @@ Integrator *RenderOptions::MakeIntegrator() const {
         integrator = CreatePathIntegrator(IntegratorParams, sampler, camera);
     else if (IntegratorName == "volpath")
         integrator = CreateVolPathIntegrator(IntegratorParams, sampler, camera);
+    else if (IntegratorName == "vpl")
+        integrator = CreateVPLIntegrator(IntegratorParams, sampler, camera);
     else if (IntegratorName == "bdpt") {
         integrator = CreateBDPTIntegrator(IntegratorParams, sampler, camera);
     } else if (IntegratorName == "mlt") {

@@ -50,15 +50,18 @@ PathIntegrator::PathIntegrator(int maxDepth,
                                std::shared_ptr<const Camera> camera,
                                std::shared_ptr<Sampler> sampler,
                                const Bounds2i &pixelBounds, Float rrThreshold,
-                               const std::string &lightSampleStrategy)
+                               const std::string &lightSampleStrategy, bool direct, uint32_t lightSamples)
     : SamplerIntegrator(camera, sampler, pixelBounds),
       maxDepth(maxDepth),
       rrThreshold(rrThreshold),
-      lightSampleStrategy(lightSampleStrategy) {}
+      lightSampleStrategy(lightSampleStrategy),
+      direct(direct),
+      lightSamples(lightSamples) {}
 
 void PathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
-    lightDistribution =
-        CreateLightSampleDistribution(lightSampleStrategy, scene);
+  scene.Preprocess();
+//    lightDistribution =
+//        CreateLightSampleDistribution(lightSampleStrategy, scene);
 }
 
 Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
@@ -112,15 +115,14 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             continue;
         }
 
-        const Distribution1D *distrib = lightDistribution->Lookup(isect.p);
+//         const Distribution1D *distrib = lightDistribution->Lookup(isect.p);
 
         // Sample illumination from lights to find path contribution.
         // (But skip this for perfectly specular BSDFs.)
         if (isect.bsdf->NumComponents(BxDFType(BSDF_ALL & ~BSDF_SPECULAR)) >
             0) {
             ++totalPaths;
-            Spectrum Ld = beta * UniformSampleOneLight(isect, scene, arena,
-                                                       sampler, false, distrib);
+            Spectrum Ld = beta * scene.SampleLights(-ray.d, isect, arena, sampler, false, lightSamples);
             VLOG(2) << "Sampled direct lighting Ld = " << Ld;
             if (Ld.IsBlack()) ++zeroRadiancePaths;
             CHECK_GE(Ld.y(), 0.f);
@@ -140,6 +142,11 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
         CHECK_GE(beta.y(), 0.f);
         DCHECK(!std::isinf(beta.y()));
         specularBounce = (flags & BSDF_SPECULAR) != 0;
+
+        if (this->direct && !specularBounce) {
+          break;
+        }
+
         if ((flags & BSDF_SPECULAR) && (flags & BSDF_TRANSMISSION)) {
             Float eta = isect.bsdf->eta;
             // Update the term that tracks radiance scaling for refraction
@@ -160,8 +167,9 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             beta *= S / pdf;
 
             // Account for the direct subsurface scattering component
-            L += beta * UniformSampleOneLight(pi, scene, arena, sampler, false,
-                                              lightDistribution->Lookup(pi.p));
+            // L += beta * UniformSampleOneLight(pi, scene, arena, sampler, false,
+            //                                   lightDistribution->Lookup(pi.p));
+            L += beta * scene.SampleLights(-ray.d, isect, arena, sampler, false, lightSamples);
 
             // Account for the indirect subsurface scattering component
             Spectrum f = pi.bsdf->Sample_f(pi.wo, &wi, sampler.Get2D(), &pdf,
@@ -208,8 +216,10 @@ PathIntegrator *CreatePathIntegrator(const ParamSet &params,
     Float rrThreshold = params.FindOneFloat("rrthreshold", 1.);
     std::string lightStrategy =
         params.FindOneString("lightsamplestrategy", "spatial");
+    bool direct = params.FindOneBool("direct", false);
+    uint32_t lightSamples = params.FindOneInt("lightsamples", 1);
     return new PathIntegrator(maxDepth, camera, sampler, pixelBounds,
-                              rrThreshold, lightStrategy);
+                              rrThreshold, lightStrategy, direct, lightSamples);
 }
 
 }  // namespace pbrt

@@ -39,6 +39,8 @@
 #define PBRT_CORE_SCENE_H
 
 // core/scene.h*
+#include "accelerators/lighttree.h"
+#include "lightsampler.h"
 #include "pbrt.h"
 #include "geometry.h"
 #include "primitive.h"
@@ -50,9 +52,10 @@ namespace pbrt {
 class Scene {
   public:
     // Scene Public Methods
-    Scene(std::shared_ptr<Primitive> aggregate,
-          const std::vector<std::shared_ptr<Light>> &lights)
-        : lights(lights), aggregate(aggregate) {
+    Scene(std::shared_ptr<Aggregate> aggregate,
+          const std::vector<std::shared_ptr<Light>> &lights, 
+          const std::shared_ptr<LightSampler>& lightSampler)
+        : lights(lights), aggregate(aggregate), _lightSampler(lightSampler) {
         // Scene Constructor Implementation
         worldBound = aggregate->WorldBound();
         for (const auto &light : lights) {
@@ -67,6 +70,16 @@ class Scene {
     bool IntersectTr(Ray ray, Sampler &sampler, SurfaceInteraction *isect,
                      Spectrum *transmittance) const;
 
+    void Preprocess() const;
+    void PreprocessWithVPL(const std::vector<std::shared_ptr<Light>>& virtualPointLights) const;
+
+    Spectrum SampleLights(const Vector3f& wi, const Interaction& it, MemoryArena& arena, 
+        Sampler& sampler, bool handleMedia = false, uint32_t nSamples = 1) const;
+
+    void ComputeShadingPointClusters(uint32_t clusterSize) const {
+      aggregate->ComputeShadingPointCluster(clusterSize);
+    }
+
     // Scene Public Data
     std::vector<std::shared_ptr<Light>> lights;
     // Store infinite light sources separately for cases where we only want
@@ -75,7 +88,8 @@ class Scene {
 
   private:
     // Scene Private Data
-    std::shared_ptr<Primitive> aggregate;
+    mutable std::shared_ptr<LightSampler> _lightSampler;
+    std::shared_ptr<Aggregate> aggregate;
     Bounds3f worldBound;
 };
 

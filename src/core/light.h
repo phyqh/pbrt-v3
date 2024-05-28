@@ -78,10 +78,15 @@ class Light {
     virtual void Pdf_Le(const Ray &ray, const Normal3f &nLight, Float *pdfPos,
                         Float *pdfDir) const = 0;
 
+    virtual Bounds3f WorldBound() const;
+    virtual bool GetOrientationAttributes(Vector3f& axis, Float& thetaO,
+        Float& thetaE) const;
+
     // Light Public Data
     const int flags;
     const int nSamples;
     const MediumInterface mediumInterface;
+    mutable uint32_t index;
 
   protected:
     // Light Protected Data

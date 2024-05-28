@@ -83,11 +83,10 @@ inline Float Cos2Phi(const Vector3f &w) { return CosPhi(w) * CosPhi(w); }
 inline Float Sin2Phi(const Vector3f &w) { return SinPhi(w) * SinPhi(w); }
 
 inline Float CosDPhi(const Vector3f &wa, const Vector3f &wb) {
-    Float waxy = wa.x * wa.x + wa.y * wa.y;
-    Float wbxy = wb.x * wb.x + wb.y * wb.y;
-    if (waxy == 0 || wbxy == 0)
-        return 1;
-    return Clamp((wa.x * wb.x + wa.y * wb.y) / std::sqrt(waxy * wbxy), -1, 1);
+    return Clamp(
+        (wa.x * wb.x + wa.y * wb.y) / std::sqrt((wa.x * wa.x + wa.y * wa.y) *
+                                                (wb.x * wb.x + wb.y * wb.y)),
+        -1, 1);
 }
 
 inline Vector3f Reflect(const Vector3f &wo, const Vector3f &n) {
@@ -141,16 +140,6 @@ struct FourierBSDFTable {
     Float *cdf;
     Float *recip;
 
-    ~FourierBSDFTable() {
-        delete[] mu;
-        delete[] m;
-        delete[] aOffset;
-        delete[] a;
-        delete[] a0;
-        delete[] cdf;
-        delete[] recip;
-    }
-
     // FourierBSDFTable Public Methods
     static bool Read(const std::string &filename, FourierBSDFTable *table);
     const Float *GetAk(int offsetI, int offsetO, int *mptr) const {
@@ -198,6 +187,9 @@ class BSDF {
 
     // BSDF Public Data
     const Float eta;
+    static PBRT_CONSTEXPR int MaxBxDFs = 8;
+    int nBxDFs = 0;
+    BxDF *bxdfs[MaxBxDFs];
 
   private:
     // BSDF Private Methods
@@ -206,9 +198,6 @@ class BSDF {
     // BSDF Private Data
     const Normal3f ns, ng;
     const Vector3f ss, ts;
-    int nBxDFs = 0;
-    static PBRT_CONSTEXPR int MaxBxDFs = 8;
-    BxDF *bxdfs[MaxBxDFs];
     friend class MixMaterial;
 };
 
@@ -234,6 +223,8 @@ class BxDF {
                          const Point2f *samples2) const;
     virtual Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
     virtual std::string ToString() const = 0;
+
+    virtual bool PrepareForLTC(Float &alpha, Float &diff, Float &spec) const { return false; }
 
     // BxDF Public Data
     const BxDFType type;
@@ -395,6 +386,11 @@ class LambertianReflection : public BxDF {
     Spectrum rho(int, const Point2f *, const Point2f *) const { return R; }
     std::string ToString() const;
 
+    bool PrepareForLTC(Float &alpha, Float &diff, Float &spec) const {
+        diff = R.y();
+        return false;
+    }
+
   private:
     // LambertianReflection Private Data
     const Spectrum R;
@@ -450,6 +446,13 @@ class MicrofacetReflection : public BxDF {
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
+
+    bool PrepareForLTC(Float &alpha, Float &diff, Float &spec) const {
+        alpha = distribution->Alpha();
+        spec = R.y();
+        return true;
+    }
+
     std::string ToString() const;
 
   private:
@@ -500,6 +503,14 @@ class FresnelBlend : public BxDF {
     Spectrum Sample_f(const Vector3f &wi, Vector3f *sampled_f, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
+
+    bool PrepareForLTC(Float &alpha, Float &diff, Float &spec) const {
+        alpha = distribution->Alpha();
+        diff = Rd.y();
+        spec = Rs.y();
+        return true;
+    }
+
     std::string ToString() const;
 
   private:
