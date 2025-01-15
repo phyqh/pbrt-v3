@@ -830,12 +830,14 @@ std::shared_ptr<LightSampler> MakeLightSampler(const std::string& name,
   if (name == "uniform") {
     lightSampler = CreateUniformLightSampler(paramSet);
   } else if (name == "slc") {
+    std::cout << "slc created" << std::endl;
     lightSampler = CreateSLCLightSampler(paramSet);
   } else if (name == "nrl") {
     lightSampler = CreateNaiveRLLightSampler(paramSet);
   } else if (name == "nrlmis") {
     lightSampler = CreateNRLMISLightSampler(paramSet);
   } else if (name == "varl") {
+    std::cout << "varl created" << std::endl;
     lightSampler = CreateVARLLightSampler(paramSet);
   } else if (name == "varlmis") {
     lightSampler = CreateVARLMISLightSampler(paramSet);

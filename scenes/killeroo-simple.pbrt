@@ -13,6 +13,7 @@ Film "image"
 Sampler "halton" "integer pixelsamples" [8]
 
 Integrator "path"
+lightsampler "slc"
 
 WorldBegin
 

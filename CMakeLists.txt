@@ -70,13 +70,13 @@ SET_PROPERTY(GLOBAL PROPERTY USE_FOLDERS ON)
 # Annoying compiler-specific details
 
 IF(CMAKE_COMPILER_IS_GNUCXX)
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14")
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-conversion-null")
 ELSEIF(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
 ELSEIF(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
   FIND_PROGRAM(XIAR xiar)
   IF(XIAR)
@@ -314,7 +314,7 @@ SET(ILMBASE_BUILD_SHARED_LIBS    OFF CACHE BOOL " " FORCE)
 
 ADD_SUBDIRECTORY(src/ext/openexr)
 
-SET_PROPERTY(TARGET IexMath eLut toFloat b44ExpLogTable dwaLookups IlmThread Half Iex Imath IlmImf PROPERTY FOLDER "ext")
+SET_PROPERTY(TARGET IexMath eLut toFloat IlmThread Half Iex Imath IlmImf PROPERTY FOLDER "ext")
 
 INCLUDE_DIRECTORIES (
   src/ext/openexr/IlmBase/Imath
@@ -382,6 +382,7 @@ SET ( PBRT_CORE_SOURCE
   src/core/interaction.cpp
   src/core/interpolation.cpp
   src/core/light.cpp
+  src/core/lightsampler.cpp
   src/core/lightdistrib.cpp
   src/core/lowdiscrepancy.cpp
   src/core/material.cpp
@@ -422,6 +423,7 @@ SET ( PBRT_CORE_HEADERS
   src/core/interaction.h
   src/core/interpolation.h
   src/core/light.h
+  src/core/lightsampler.h
   src/core/lowdiscrepancy.h
   src/core/material.h
   src/core/medium.h
@@ -456,6 +458,7 @@ FILE ( GLOB PBRT_SOURCE
   src/filters/*
   src/integrators/*
   src/lights/*
+  src/lightsamplers/*
   src/materials/*
   src/samplers/*
   src/shapes/*

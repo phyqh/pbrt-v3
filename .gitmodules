@@ -1,12 +1,13 @@
 [submodule "src/ext/openexr"]
-	path = src/ext/openexr
-	url = https://github.com/wjakob/openexr
+  path = src/ext/openexr
+  url = https://github.com/AcademySoftwareFoundation/openexr
+  branch = release/2.3
 [submodule "src/ext/zlib"]
-	path = src/ext/zlib
-	url = https://github.com/mitsuba-renderer/zlib
+  path = src/ext/zlib
+  url = https://github.com/mitsuba-renderer/zlib
 [submodule "src/ext/glog"]
-	path = src/ext/glog
-	url = https://github.com/google/glog.git
+  path = src/ext/glog
+  url = https://github.com/google/glog.git
 [submodule "src/ext/ptex"]
-	path = src/ext/ptex
-	url = https://github.com/wdas/ptex.git
+  path = src/ext/ptex
+  url = https://github.com/wdas/ptex.git

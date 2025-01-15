@@ -5,3 +5,7 @@ src/objs
 .sconsign.dblite
 
 /build
+/scenes
+
+*.exr
+*.png
