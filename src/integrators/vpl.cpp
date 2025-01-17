@@ -80,6 +80,8 @@ void VPLIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
             vplFile << "    \"float scale\" [ 1 ]\n";
             vplFile << "AttributeEnd\n";
 
+            contrib *= _nLightPaths;
+
             virtualPointLights.push_back(std::make_shared<VirtualPointLight>(its.p, its.shading.n, 1e-4, 
                 its.mediumInterface, contrib / _nLightPaths));
 
@@ -189,7 +191,7 @@ Spectrum VPLIntegrator::Li(const RayDifferential& r, const Scene& scene,
 VPLIntegrator* CreateVPLIntegrator(const ParamSet& params, 
     std::shared_ptr<Sampler> sampler, 
     std::shared_ptr<const Camera> camera) {
-  int nLightPaths = params.FindOneInt("nlightpaths", 10000);
+  int nLightPaths = params.FindOneInt("nlightpaths", 70000);
   Float rrThreshold = params.FindOneFloat("rrThreshold", 0.01);
   int maxDepth = params.FindOneInt("maxdepth", 8);
   int maxSpecularDepth = params.FindOneInt("maxspeculardepth", 8);
