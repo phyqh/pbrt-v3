@@ -9,6 +9,8 @@
 
 #include "sampling.h"
 #include "stats.h"
+#include "paramset.h"
+#include "scene.h"
 
 namespace pbrt {
   
@@ -73,6 +75,33 @@ bool VirtualPointLight::GetOrientationAttributes(Vector3f &axis, Float &thetaO, 
   thetaO = Pi;
   thetaE = PiOver2;
   return true;
+}
+
+std::shared_ptr<VirtualPointLight> CreateVirtualPointLight(
+    const Transform &light2world,
+    const Medium *medium,
+    const ParamSet &paramSet) {
+    // Get the intensity parameter (I)
+    Spectrum I = paramSet.FindOneSpectrum("I", Spectrum(1.0));
+    
+    // Get the scaling factor
+    Spectrum sc = paramSet.FindOneSpectrum("scale", Spectrum(1.0));
+    I *= sc;
+    
+    // Get the position and transform it
+    Point3f P = paramSet.FindOnePoint3f("from", Point3f(0, 0, 0));
+    Point3f pLight = light2world(P);
+    
+    // Get the normal direction (defaulting to up vector if not specified)
+    Normal3f N = paramSet.FindOneNormal3f("normal", Normal3f(0, 1, 0));
+    Normal3f nLight = Normalize(light2world(N));
+    
+    // Get the radius epsilon parameter (defaulting to 0)
+    Float reps = paramSet.FindOneFloat("radius", 0.0f);
+    
+    // Create and return the VirtualPointLight with the correct constructor signature
+    return std::make_shared<VirtualPointLight>(pLight, nLight, reps,
+        MediumInterface(medium), I);
 }
 
 } // namespace pbrt

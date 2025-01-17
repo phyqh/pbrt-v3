@@ -47,7 +47,10 @@ private:
   const Normal3f _n;
   const Float _reps;
 };
-
+std::shared_ptr<VirtualPointLight> CreateVirtualPointLight(
+    const Transform &light2world,
+    const Medium *medium,
+    const ParamSet &paramSet);
 } // namespace pbrt
 
 #endif // PBRT_LIGHTS_VIRTUAL_POINT_H
