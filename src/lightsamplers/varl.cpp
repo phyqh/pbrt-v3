@@ -502,6 +502,7 @@ LightSampler* CreateVARLLightSampler(const ParamSet& params) {
   uint32_t initLightCutSize = params.FindOneInt("initlightcutsize", 0);
   bool isAdaptive = params.FindOneBool("adaptive", true);
   uint32_t shadingPointClusters = params.FindOneInt("shadingpointclusters", 32768);
+  std::cout << "shadingPointClusters: " << shadingPointClusters << std::endl;
   bool biased = params.FindOneBool("biased", false);
   std::string strategy = params.FindOneString("vstar", "zero");
   return new VARLLightSampler(directionalGridNumber, learningRate, gamma, 

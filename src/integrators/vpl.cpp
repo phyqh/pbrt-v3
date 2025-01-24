@@ -76,7 +76,7 @@ void VPLIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
             vplFile << "    \"rgb I\" [ " << contrib[0] << " " << contrib[1] << " " << contrib[2] << " ]\n";
             vplFile << "    \"point3 from\" [ " << its.p.x << " " << its.p.y << " " << its.p.z << " ]\n";
             vplFile << "    \"normal normal\" [ " << its.shading.n.x << " " << its.shading.n.y << " " << its.shading.n.z << " ]\n";
-            vplFile << "    \"float radius\" [ 0.001 ]\n";
+            vplFile << "    \"float radius\" [ 0.0001 ]\n";
             vplFile << "    \"float scale\" [ 1 ]\n";
             vplFile << "AttributeEnd\n";
 
@@ -157,7 +157,7 @@ Spectrum VPLIntegrator::Li(const RayDifferential& r, const Scene& scene,
   }
   Vector3f wo = its.wo;
   L += its.Le(its.wo);
-  L += UniformSampleAllLights(its, scene, arena, sampler, _nLightSamples);
+  // L += UniformSampleAllLights(its, scene, arena, sampler, _nLightSamples);
   L += scene.SampleLights(r.d, its, arena, sampler, false, _lightSamples);
 
   // // Specular Computation
@@ -191,7 +191,7 @@ Spectrum VPLIntegrator::Li(const RayDifferential& r, const Scene& scene,
 VPLIntegrator* CreateVPLIntegrator(const ParamSet& params, 
     std::shared_ptr<Sampler> sampler, 
     std::shared_ptr<const Camera> camera) {
-  int nLightPaths = params.FindOneInt("nlightpaths", 70000);
+  int nLightPaths = params.FindOneInt("nlightpaths", 500000);
   Float rrThreshold = params.FindOneFloat("rrThreshold", 0.01);
   int maxDepth = params.FindOneInt("maxdepth", 8);
   int maxSpecularDepth = params.FindOneInt("maxspeculardepth", 8);
